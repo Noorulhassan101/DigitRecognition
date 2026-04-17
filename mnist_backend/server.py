@@ -20,9 +20,9 @@ app.add_middleware(
 from utils.preprocess import preprocess_image
 
 try:
-    import tflite_runtime.interpreter as tflite
+    import ai_edge_litert.interpreter as tflite
 except ImportError:
-    # Fallback for local testing if tflite-runtime fails but standard tensorflow is present
+    # Fallback for local testing if ai-edge-litert fails but standard tensorflow is present
     try:
         from tensorflow import lite as tflite
     except ImportError:
