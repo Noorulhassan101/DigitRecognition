@@ -17,21 +17,34 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Late import and loading to minimize startup issues on simple requests
-import tensorflow as tf
 from utils.preprocess import preprocess_image
 
-model = None
-model_path = os.path.join(os.path.dirname(__file__), 'model.h5')
+try:
+    import tflite_runtime.interpreter as tflite
+except ImportError:
+    # Fallback for local testing if tflite-runtime fails but standard tensorflow is present
+    try:
+        from tensorflow import lite as tflite
+    except ImportError:
+        tflite = None
+        print("TFLite runtime not found!")
 
-def load_tf_model():
-    global model
-    if model is None:
+interpreter = None
+input_details = None
+output_details = None
+model_path = os.path.join(os.path.dirname(__file__), 'model.tflite')
+
+def load_tflite_model():
+    global interpreter, input_details, output_details
+    if interpreter is None and tflite is not None:
         if os.path.exists(model_path):
             try:
-                model = tf.keras.models.load_model(model_path)
+                interpreter = tflite.Interpreter(model_path=model_path)
+                interpreter.allocate_tensors()
+                input_details = interpreter.get_input_details()
+                output_details = interpreter.get_output_details()
             except Exception as e:
-                print(f"Error loading model: {e}")
+                print(f"Error loading TFLite model: {e}")
                 pass
         else:
             print(f"Model not found at {model_path}.")
@@ -41,20 +54,26 @@ class ImageRequest(BaseModel):
 
 @app.on_event("startup")
 async def startup_event():
-    load_tf_model()
+    load_tflite_model()
 
 @app.post("/predict")
 async def predict_digit(req: ImageRequest):
-    global model
-    if model is None:
-        load_tf_model()
-        if model is None:
-            raise HTTPException(status_code=503, detail="Model is not loaded. Train the model first using train.py.")
+    global interpreter
+    if interpreter is None:
+        load_tflite_model()
+        if interpreter is None:
+            raise HTTPException(status_code=503, detail="Model is not loaded. Ensure model.tflite exists.")
         
     try:
         img_array = preprocess_image(req.image)
-        # Prediction
-        preds = model.predict(img_array, verbose=0)[0]
+        # Ensure the type matches what TFLite expects
+        img_array = np.array(img_array, dtype=np.float32)
+        
+        # Prediction via TFLite Runtime
+        interpreter.set_tensor(input_details[0]['index'], img_array)
+        interpreter.invoke()
+        preds = interpreter.get_tensor(output_details[0]['index'])[0]
+        
         predicted_digit = int(np.argmax(preds))
         confidences = [float(p) for p in preds]
         
@@ -82,4 +101,4 @@ async def get_metrics():
 
 @app.get("/")
 async def root():
-    return {"status": "ok", "message": "MNIST API is running"}
+    return {"status": "ok", "message": "MNIST API (TFLite) is running natively!"}
