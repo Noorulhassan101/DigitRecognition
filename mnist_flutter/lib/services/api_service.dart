@@ -6,7 +6,7 @@ class ApiService extends ChangeNotifier {
   // Configurable base URL for API. On Vercel this could be your deployed url.
   // Using localhost by default for local development.
   // Note: For Chrome Flutter web, 127.0.0.1 might need to be replaced with localhost or your local IP.
-  String baseUrl = "http://127.0.0.1:8000";
+  String baseUrl = "https://digitrecognition101-px7iz79qo-noorulhassan101s-projects.vercel.app";
 
   bool isPredicting = false;
   int? predictedDigit;
